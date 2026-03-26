@@ -12,5 +12,6 @@ export type CategoryWithFeeds = Category & {
 export type SidebarData = {
   categories: CategoryWithFeeds[];
   uncategorized: Feed[];
-  unreadCounts: Record<number, number>; // feedId -> count
+  favorites: Feed[];
+  unreadCounts: Record<number, number>;
 };

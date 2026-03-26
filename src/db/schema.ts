@@ -21,6 +21,7 @@ export const feeds = sqliteTable("feeds", {
   faviconUrl: text("favicon_url"),
   lastFetchedAt: integer("last_fetched_at", { mode: "timestamp_ms" }),
   fetchError: text("fetch_error"),
+  isFavorite: integer("is_favorite", { mode: "boolean" }).notNull().default(false),
   createdAt: integer("created_at", { mode: "timestamp_ms" })
     .notNull()
     .default(sql`(unixepoch() * 1000)`),

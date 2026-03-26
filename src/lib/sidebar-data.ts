@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { articles, categories, feeds } from "@/db/schema";
+import { articles, feeds } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
 import type { SidebarData } from "@/types";
 
@@ -21,8 +21,10 @@ export async function getSidebarData(): Promise<SidebarData> {
 
   const categoryMap = new Map(allCategories.map((c) => [c.id, { ...c, feeds: [] as typeof allFeeds }]));
   const uncategorized: typeof allFeeds = [];
+  const favorites: typeof allFeeds = [];
 
   for (const feed of allFeeds) {
+    if (feed.isFavorite) favorites.push(feed);
     if (feed.categoryId && categoryMap.has(feed.categoryId)) {
       categoryMap.get(feed.categoryId)!.feeds.push(feed);
     } else {
@@ -33,6 +35,7 @@ export async function getSidebarData(): Promise<SidebarData> {
   return {
     categories: Array.from(categoryMap.values()),
     uncategorized,
+    favorites,
     unreadCounts,
   };
 }
