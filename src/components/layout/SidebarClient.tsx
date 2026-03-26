@@ -1,8 +1,8 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Plus, Bookmark, LayoutList, ChevronDown, ChevronRight, Rss, Trash2, FolderPlus } from "lucide-react";
+import { Plus, Bookmark, LayoutList, ChevronDown, ChevronRight, Rss, Trash2, FolderPlus, MoreHorizontal, Star, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AddFeedDialog } from "@/components/feeds/AddFeedDialog";
 import { RefreshAllButton } from "@/components/feeds/RefreshAllButton";
@@ -18,16 +18,67 @@ function UnreadBadge({ count }: { count: number }) {
   );
 }
 
+function CategoryMenu({
+  onRename,
+  onFavorite,
+}: {
+  onRename: () => void;
+  onFavorite: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    if (open) document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
+        className="p-1 rounded text-gray-300 hover:text-gray-600 hover:bg-gray-100 opacity-0 group-hover/cat:opacity-100 transition-opacity"
+      >
+        <MoreHorizontal size={13} />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full mt-1 z-50 w-36 bg-white rounded-lg shadow-lg border border-gray-100 py-1 text-sm">
+          <button
+            onClick={() => { setOpen(false); onFavorite(); }}
+            className="w-full flex items-center gap-2 px-3 py-1.5 text-gray-700 hover:bg-gray-50"
+          >
+            <Star size={13} className="text-gray-400" />
+            즐겨찾기
+          </button>
+          <button
+            onClick={() => { setOpen(false); onRename(); }}
+            className="w-full flex items-center gap-2 px-3 py-1.5 text-gray-700 hover:bg-gray-50"
+          >
+            <Pencil size={13} className="text-gray-400" />
+            이름 변경
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function FeedItem({
   feed,
   unreadCount,
   onDelete,
   draggable = false,
+  indented = false,
 }: {
   feed: Feed;
   unreadCount: number;
   onDelete: (id: number) => void;
   draggable?: boolean;
+  indented?: boolean;
 }) {
   const pathname = usePathname();
   const isActive = pathname === `/feed/${feed.id}`;
@@ -43,7 +94,8 @@ function FeedItem({
       draggable={draggable}
       onDragStart={draggable ? handleDragStart : undefined}
       className={cn(
-        "group flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm cursor-pointer transition-colors",
+        "group flex items-center gap-2 py-1.5 rounded-lg text-sm cursor-pointer transition-colors",
+        indented ? "pl-6 pr-3" : "px-3",
         draggable && "cursor-grab active:cursor-grabbing",
         isActive ? "bg-brand/10 text-brand font-medium" : "text-gray-600 hover:bg-gray-100"
       )}
@@ -78,16 +130,20 @@ function CategorySection({
   unreadCounts,
   onDeleteFeed,
   onDropFeed,
+  onRenameCategory,
 }: {
   category: Category;
   feeds: Feed[];
   unreadCounts: Record<number, number>;
   onDeleteFeed: (id: number) => void;
   onDropFeed: (feedId: number, categoryId: number) => void;
+  onRenameCategory: (id: number, name: string) => void;
 }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState(category.name);
   const totalUnread = feeds.reduce((sum, f) => sum + (unreadCounts[f.id] || 0), 0);
   const isActive = pathname === `/category/${category.id}`;
 
@@ -104,34 +160,58 @@ function CategorySection({
     if (feedId) onDropFeed(feedId, category.id);
   }
 
+  async function handleRenameSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!renameValue.trim() || renameValue === category.name) { setRenaming(false); return; }
+    onRenameCategory(category.id, renameValue.trim());
+    setRenaming(false);
+  }
+
   return (
     <div
       onDragOver={handleDragOver}
       onDragLeave={() => setDragOver(false)}
       onDrop={handleDrop}
-      className={cn(
-        "rounded-lg transition-colors",
-        dragOver && "bg-brand/5 ring-1 ring-brand/30"
-      )}
+      className={cn("rounded-lg transition-colors", dragOver && "bg-brand/5 ring-1 ring-brand/30")}
     >
-      <div className="flex items-center gap-1 px-1">
+      <div className="group/cat flex items-center gap-1 px-1">
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="p-1 text-gray-400 hover:text-gray-600"
+          className="p-1 text-gray-400 hover:text-gray-600 flex-shrink-0"
         >
           {collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
         </button>
-        <Link
-          href={`/category/${category.id}`}
-          className={cn(
-            "flex-1 text-xs font-semibold uppercase tracking-wider py-1 transition-colors",
-            isActive ? "text-brand" : "text-gray-400 hover:text-gray-700"
-          )}
-        >
-          {category.name}
-        </Link>
-        {totalUnread > 0 && <UnreadBadge count={totalUnread} />}
+
+        {renaming ? (
+          <form onSubmit={handleRenameSubmit} className="flex-1 flex gap-1">
+            <input
+              autoFocus
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onBlur={handleRenameSubmit}
+              className="flex-1 text-xs font-semibold uppercase tracking-wider bg-transparent border-b border-brand outline-none text-gray-700"
+            />
+          </form>
+        ) : (
+          <Link
+            href={`/category/${category.id}`}
+            className={cn(
+              "flex-1 text-xs font-semibold uppercase tracking-wider py-1 transition-colors",
+              isActive ? "text-brand" : "text-gray-400 hover:text-gray-700"
+            )}
+          >
+            {category.name}
+          </Link>
+        )}
+
+        <CategoryMenu
+          onRename={() => { setRenameValue(category.name); setRenaming(true); }}
+          onFavorite={() => {}}
+        />
+
+        {totalUnread > 0 && !renaming && <UnreadBadge count={totalUnread} />}
       </div>
+
       {!collapsed && (
         <div className="mt-0.5 space-y-0.5">
           {feeds.map((feed) => (
@@ -140,10 +220,11 @@ function CategorySection({
               feed={feed}
               unreadCount={unreadCounts[feed.id] || 0}
               onDelete={onDeleteFeed}
+              indented
             />
           ))}
           {feeds.length === 0 && (
-            <p className="px-3 py-1 text-xs text-gray-300 italic">Drop feeds here</p>
+            <p className="pl-6 py-1 text-xs text-gray-300 italic">Drop feeds here</p>
           )}
         </div>
       )}
@@ -175,6 +256,15 @@ export function SidebarClient({
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ categoryId }),
+    });
+    router.refresh();
+  }
+
+  async function handleRenameCategory(id: number, name: string) {
+    await fetch(`/api/categories/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
     });
     router.refresh();
   }
@@ -238,6 +328,7 @@ export function SidebarClient({
                 unreadCounts={data.unreadCounts}
                 onDeleteFeed={handleDeleteFeed}
                 onDropFeed={handleDropFeed}
+                onRenameCategory={handleRenameCategory}
               />
             ))}
 
