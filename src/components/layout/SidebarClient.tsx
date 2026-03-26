@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -31,9 +31,11 @@ function FloatingMenu({ anchorRef, onClose, items }: {
   items: MenuItem[];
 }) {
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const [mounted, setMounted] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    setMounted(true);
     if (anchorRef.current) {
       const r = anchorRef.current.getBoundingClientRect();
       setPos({ top: r.bottom + 4, left: r.left });
@@ -48,7 +50,7 @@ function FloatingMenu({ anchorRef, onClose, items }: {
     return () => document.removeEventListener("mousedown", handleDown);
   }, [anchorRef, onClose]);
 
-  if (!pos) return null;
+  if (!mounted || !pos) return null;
 
   return createPortal(
     <div
